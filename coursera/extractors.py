@@ -10,7 +10,7 @@ import json
 import logging
 
 from .api import CourseraOnDemand, OnDemandCourseMaterialItems
-from .define import OPENCOURSE_CONTENT_URL
+from .define import OPENCOURSE_CONTENT_URL, OPENCOURSE_RESOURCES_URL, OPENCOURSE_SINGLE_RESOURCE_URL
 from .cookies import login
 from .network import get_page
 from .utils import is_debug_run
@@ -43,6 +43,12 @@ class CourseraExtractor(PlatformExtractor):
                                   course_id=None,
                                   course_name=None)
         return course.list_courses()
+
+    def _get_resources_page(self, course_id):
+        url = OPENCOURSE_RESOURCES_URL.format(course_id=course_id)
+        page = get_page(self._session, url)
+        logging.info('Downloaded resource page %s (%d bytes)', url, len(page))
+        return page
 
     def get_modules(self, class_name,
                     reverse=False, unrestricted_filenames=False,
@@ -83,6 +89,18 @@ class CourseraExtractor(PlatformExtractor):
 
         dom = json.loads(page)
         course_name = dom['slug']
+        course_id = dom['id']
+
+        try:
+            resources_page = self._get_resources_page(course_id)
+        except:
+            resources_page = None
+
+        resources_dom = None
+        if resources_page:
+            resources_dom = json.loads(resources_page)
+            if len(resources_dom['elements']) == 0:
+                resources_dom = None
 
         logging.info('Parsing syllabus of on-demand course. '
                      'This may take some time, please be patient ...')
@@ -102,6 +120,27 @@ class CourseraExtractor(PlatformExtractor):
                 json.dump(ondemand_material_items._items, file_object, indent=4)
 
         error_occured = False
+
+        all_resources = None
+        if resources_dom:
+            all_resources = resources_dom['elements']
+
+        resource_modules = []
+        if all_resources:
+            for resource in all_resources:
+                res_dl = []
+                resource_slug = resource['slug']
+                logging.info('Processing resource  %s',
+                             resource_slug)
+
+                links = course.extract_links_from_resource(resource['shortId'])
+                if links is None:
+                    error_occured = True
+                elif links:
+                    res_dl.append(('', links))
+
+                if res_dl:
+                    resource_modules.append((resource_slug, res_dl))
 
         for module in json_modules:
             module_slug = module['slug']
@@ -155,6 +194,10 @@ class CourseraExtractor(PlatformExtractor):
                         if download_quizzes:
                             links = course.extract_links_from_exam(lecture['id'])
 
+                    elif typename == 'programming':
+                        if download_quizzes:
+                            links = course.extract_links_from_programming_exam(lecture['id'])
+
                     else:
                         logging.info('Unsupported typename "%s" in lecture "%s"',
                                      typename, lecture_slug)
@@ -170,6 +213,9 @@ class CourseraExtractor(PlatformExtractor):
 
             if sections:
                 modules.append((module_slug, sections))
+
+        if resources_dom:
+            modules.append(("Resources", resource_modules))
 
         if modules and reverse:
             modules.reverse()

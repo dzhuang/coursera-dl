@@ -25,6 +25,9 @@ from .define import (OPENCOURSE_SUPPLEMENT_URL,
                      OPENCOURSE_ONDEMAND_COURSE_MATERIALS,
                      OPENCOURSE_VIDEO_URL,
                      OPENCOURSE_MEMBERSHIPS,
+                     OPENCOURSE_SINGLE_RESOURCE_URL,
+                     OPENCOURSE_PROGRAMMING_EXAM_URL,
+
                      POST_OPENCOURSE_API_QUIZ_SESSION,
                      POST_OPENCOURSE_API_QUIZ_SESSION_GET_STATE,
                      POST_OPENCOURSE_ONDEMAND_EXAM_SESSIONS,
@@ -751,6 +754,39 @@ class CourseraOnDemand(object):
 
         return lecture_video_content
 
+    def extract_links_from_programming_exam(self, element_id):
+        """
+        Return a dictionary with links to supplement files (pdf, csv, zip,
+        ipynb, html and so on) extracted from graded programming assignment.
+
+        @param element_id: Element ID to extract files from.
+        @type element_id: str
+
+        @return: @see CourseraOnDemand._extract_links_from_text
+        """
+        logging.debug('Gathering supplement URLs for element_id <%s>.', element_id)
+
+        try:
+            # Assignment text (instructions) contains asset tags which describe
+            # supplementary files.
+            text = ''.join(self._extract_programming_exam_text(element_id))
+            if not text:
+                return {}
+
+            supplement_links = self._extract_links_from_text(text)
+            instructions = (IN_MEMORY_MARKER + self._markup_to_html(text),
+                            'instructions')
+            extend_supplement_links(
+                supplement_links, {IN_MEMORY_EXTENSION: [instructions]})
+            return supplement_links
+        except requests.exceptions.HTTPError as exception:
+            logging.error('Could not download programming assignment %s: %s',
+                          element_id, exception)
+            if is_debug_run():
+                logging.exception('Could not download programming assignment %s: %s',
+                                  element_id, exception)
+            return None
+
     def extract_links_from_programming(self, element_id):
         """
         Return a dictionary with links to supplement files (pdf, csv, zip,
@@ -874,6 +910,69 @@ class CourseraOnDemand(object):
 
         return [{'id': element['id'],
                  'url': element['url'].strip()}
+                for element in dom['elements']]
+
+    def extract_links_from_resource(self, short_id):
+        """
+        Return a dictionary with supplement files (pdf, csv, zip, ipynb, html
+        and so on) extracted from supplement page.
+
+        @return: @see CourseraOnDemand._extract_links_from_text
+        """
+        logging.debug('Gathering resource URLs for short_id <%s>.', short_id)
+
+        try:
+            dom = get_page(self._session, OPENCOURSE_SINGLE_RESOURCE_URL,
+                           json=True,
+                           course_id=self._course_id,
+                           short_id=short_id)
+
+            resource_content = {}
+
+            # Supplement content has structure as follows:
+            # 'linked' {
+            #   'openCourseAssets.v1' [ {
+            #       'definition' {
+            #           'value'
+
+            for asset in dom['linked']['openCourseAssets.v1']:
+                value = asset['definition']['value']
+                # Supplement lecture types are known to contain both <asset> tags
+                # and <a href> tags (depending on the course), so we extract
+                # both of them.
+                extend_supplement_links(
+                    resource_content, self._extract_links_from_text(value))
+
+                instructions = (IN_MEMORY_MARKER + self._markup_to_html(value),
+                                'resources')
+                extend_supplement_links(
+                    resource_content, {IN_MEMORY_EXTENSION: [instructions]})
+
+            return resource_content
+        except requests.exceptions.HTTPError as exception:
+            logging.error('Could not download supplement %s: %s',
+                          short_id, exception)
+            if is_debug_run():
+                logging.exception('Could not download supplement %s: %s',
+                                  short_id, exception)
+            return None
+
+    def _extract_programming_exam_text(self, element_id):
+        """
+        Extract assignment text (instructions).
+
+        @param element_id: Element id to extract assignment instructions from.
+        @type element_id: str
+
+        @return: List of assignment text (instructions).
+        @rtype: [str]
+        """
+        dom = get_page(self._session, OPENCOURSE_PROGRAMMING_EXAM_URL,
+                       json=True,
+                       course_id=self._course_id,
+                       element_id=element_id)
+
+        return [element['assignmentInstructions']['definition']['value']
                 for element in dom['elements']]
 
     def _extract_assignment_text(self, element_id):
