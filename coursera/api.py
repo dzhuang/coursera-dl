@@ -733,20 +733,48 @@ class CourseraOnDemand(object):
             logging.debug('Gathering %s URLs for video_id <%s>.', subtitle_description, video_id)
             subtitles = dom.get(subtitle_node)
             if subtitles is not None:
-                if subtitle_language == 'all':
-                    for current_subtitle_language in subtitles:
-                        video_content[current_subtitle_language + '.' + subtitle_extension] = make_coursera_absolute_url(subtitles.get(current_subtitle_language))
-                else:
-                    if subtitle_language != 'en' and subtitle_language not in subtitles:
-                        logging.warning("%s unavailable in '%s' language for video "
-                                        "with video id: [%s], falling back to 'en' "
-                                        "%s", subtitle_description.capitalize(), subtitle_language, video_id, subtitle_description)
-                        subtitle_language = 'en'
+                subtitles_set = set(subtitles)
+                requested_subtitle_list = [s.strip() for s in subtitle_language.split(",")]
+                subtitle_set_download = set()
+                subtitle_set_nonexist = set()
+                download_all_subtitle = False
+                requested_subtitle_set = set()
+                for language_with_alts in requested_subtitle_list:
+                    if download_all_subtitle:
+                        break
+                    l_list = [l.strip() for l in language_with_alts.split("|")]
+                    for l in l_list:
+                        if l == "all":
+                            download_all_subtitle = True
+                            break
+                        elif l in subtitles_set:
+                            subtitle_set_download.update([l])
+                            break
+                        else:
+                            subtitle_set_nonexist.update([l])
 
-                    subtitle_url = subtitles.get(subtitle_language)
+                if download_all_subtitle:
+                    subtitle_set_download = set(subtitles)
+
+                if subtitle_set_nonexist:
+                    logging.warning("%s unavailable in '%s' language for video "
+                                    "with video id: [%s],"
+                                    "%s", subtitle_description.capitalize(),
+                                    ", ".join(subtitle_set_nonexist), video_id,
+                                    subtitle_description)
+                if not subtitle_set_download:
+                    logging.warning("%s all requested subtitles are unavaliable,"
+                                    "with video id: [%s], falling back to 'en' "
+                                    "%s", subtitle_description.capitalize(),
+                                    video_id,
+                                    subtitle_description)
+                    subtitle_set_download = set(['en'])
+
+                for current_subtitle_language in subtitle_set_download:
+                    subtitle_url = subtitles.get(current_subtitle_language)
                     if subtitle_url is not None:
                         # some subtitle urls are relative!
-                        video_content[subtitle_language + '.' + subtitle_extension] = make_coursera_absolute_url(subtitle_url)
+                        video_content[current_subtitle_language + '.' + subtitle_extension] = make_coursera_absolute_url(subtitle_url)
 
         lecture_video_content = {}
         for key, value in iteritems(video_content):
