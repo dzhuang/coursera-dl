@@ -53,13 +53,13 @@ class CourseraExtractor(PlatformExtractor):
     def get_modules(self, class_name,
                     reverse=False, unrestricted_filenames=False,
                     subtitle_language='en', video_resolution=None,
-                    download_quizzes=False):
+                    download_quizzes=False, mathjax_cdn_addr=None):
 
         page = self._get_on_demand_syllabus(class_name)
         error_occured, modules = self._parse_on_demand_syllabus(
             page, reverse, unrestricted_filenames,
             subtitle_language, video_resolution,
-            download_quizzes)
+            download_quizzes, mathjax_cdn_addr)
         return error_occured, modules
 
     def _get_on_demand_syllabus(self, class_name):
@@ -77,7 +77,9 @@ class CourseraExtractor(PlatformExtractor):
                                   unrestricted_filenames=False,
                                   subtitle_language='en',
                                   video_resolution=None,
-                                  download_quizzes=False):
+                                  download_quizzes=False,
+                                  mathjax_cdn_addr=None
+                                  ):
         """
         Parse a Coursera on-demand course listing/syllabus page.
 
@@ -96,7 +98,9 @@ class CourseraExtractor(PlatformExtractor):
         json_modules = dom['courseMaterial']['elements']
         course = CourseraOnDemand(session=self._session, course_id=dom['id'],
                                   course_name=course_name,
-                                  unrestricted_filenames=unrestricted_filenames)
+                                  unrestricted_filenames=unrestricted_filenames,
+                                  mathjax_cdn_addr=mathjax_cdn_addr
+                                  )
         course.obtain_user_id()
         ondemand_material_items = OnDemandCourseMaterialItems.create(
             session=self._session, course_name=course_name)

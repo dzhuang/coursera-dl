@@ -781,7 +781,7 @@ FORMAT_MAX_LENGTH = 20
 TITLE_MAX_LENGTH = 200
 
 #: CSS that is usen to prettify instructions
-INSTRUCTIONS_HTML_INJECTION = '''
+INSTRUCTIONS_HTML_INJECTION_PRE = '''
 <style>
 body {
     padding: 50px 85px 50px 85px;
@@ -821,7 +821,9 @@ pre {
 </style>
 
 <script type="text/javascript" async
-  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  src="'''
+
+INSTRUCTIONS_HTML_INJECTION_AFTER ='''?config=TeX-AMS-MML_HTMLorMML">
 </script>
 
 <script type="text/x-mathjax-config">

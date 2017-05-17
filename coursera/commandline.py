@@ -6,7 +6,7 @@ handling. The primary candidate is argument parser.
 import os
 import sys
 import logging
-import argparse
+import configargparse as argparse
 
 from coursera import __version__
 
@@ -33,8 +33,15 @@ def parse_args(args=None):
     Parse the arguments/options passed to the program on the command line.
     """
 
-    parser = argparse.ArgumentParser(
-        description='Download Coursera.org lecture material and resources.')
+    parse_kwargs = {
+        "description":  'Download Coursera.org lecture material and resources.'
+    }
+
+    cfg_file_name = 'coursera-dl.conf'
+    cfg_file_path = os.path.join(os.getcwd(), cfg_file_name)
+    if os.path.isfile(cfg_file_path):
+        parse_kwargs["default_config_files"] = [cfg_file_path]
+    parser = argparse.ArgParser(**parse_kwargs)
 
     # Basic options
     group_basic = parser.add_argument_group('Basic options')
@@ -315,6 +322,13 @@ def parse_args(args=None):
                                 action='store_true',
                                 default=False,
                                 help='generate M3U playlists for course weeks')
+
+    group_adv_misc.add_argument('-mj',
+                                '--mathjax-cdn',
+                                dest='mathjax_cdn_addr',
+                                default='https://cdn.mathjax.org/mathjax/latest/MathJax.js',
+                                help='the cdn address of MathJax.js'
+                                )
 
     # Debug options
     group_debug = parser.add_argument_group('Debugging options')

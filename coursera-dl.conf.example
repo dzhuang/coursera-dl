@@ -1,0 +1,7 @@
+# This is an example of using conf file to store args.
+
+--username abc@abc.com
+--password passwd
+--subtitle-language en,zh-CN|zh-TW
+--download-quizzes True
+--mathjax-cdn https://cdn.bootcss.com/mathjax/2.7.1/MathJax.js

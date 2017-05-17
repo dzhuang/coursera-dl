@@ -33,7 +33,8 @@ from .define import (OPENCOURSE_SUPPLEMENT_URL,
                      POST_OPENCOURSE_ONDEMAND_EXAM_SESSIONS,
                      POST_OPENCOURSE_ONDEMAND_EXAM_SESSIONS_GET_STATE,
 
-                     INSTRUCTIONS_HTML_INJECTION,
+                     INSTRUCTIONS_HTML_INJECTION_PRE,
+                     INSTRUCTIONS_HTML_INJECTION_AFTER,
 
                      IN_MEMORY_EXTENSION,
                      IN_MEMORY_MARKER)
@@ -138,9 +139,12 @@ class QuizExamToMarkupConverter(object):
 
 
 class MarkupToHTMLConverter(object):
-    def __init__(self, session):
+    def __init__(self, session, mathjax_cdn_addr=None):
         self._session = session
         self._asset_retriever = AssetRetriever(session)
+        if not mathjax_cdn_addr:
+            mathjax_cdn_addr = 'https://cdn.mathjax.org/mathjax/latest/MathJax.js'
+        self._mathjax_cdn_addr = mathjax_cdn_addr
 
     def __call__(self, markup):
         """
@@ -173,7 +177,8 @@ class MarkupToHTMLConverter(object):
         soup.insert(0, meta)
 
         # 1. Inject basic CSS style
-        css_soup = BeautifulSoup(INSTRUCTIONS_HTML_INJECTION)
+        html = "".join([INSTRUCTIONS_HTML_INJECTION_PRE, self._mathjax_cdn_addr, INSTRUCTIONS_HTML_INJECTION_AFTER])
+        css_soup = BeautifulSoup(html)
         soup.append(css_soup)
 
         # 2. Replace <text> with <p>
@@ -389,7 +394,9 @@ class CourseraOnDemand(object):
     """
 
     def __init__(self, session, course_id, course_name,
-                 unrestricted_filenames=False):
+                 unrestricted_filenames=False,
+                 mathjax_cdn_addr=None
+                 ):
         """
         Initialize Coursera OnDemand API.
 
@@ -412,7 +419,7 @@ class CourseraOnDemand(object):
         self._user_id = None
 
         self._quiz_to_markup = QuizExamToMarkupConverter(session)
-        self._markup_to_html = MarkupToHTMLConverter(session)
+        self._markup_to_html = MarkupToHTMLConverter(session, mathjax_cdn_addr=mathjax_cdn_addr)
         self._asset_retriever = AssetRetriever(session)
 
     def obtain_user_id(self):
@@ -738,7 +745,6 @@ class CourseraOnDemand(object):
                 subtitle_set_download = set()
                 subtitle_set_nonexist = set()
                 download_all_subtitle = False
-                requested_subtitle_set = set()
                 for language_with_alts in requested_subtitle_list:
                     if download_all_subtitle:
                         break
