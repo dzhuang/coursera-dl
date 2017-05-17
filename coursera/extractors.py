@@ -89,18 +89,6 @@ class CourseraExtractor(PlatformExtractor):
 
         dom = json.loads(page)
         course_name = dom['slug']
-        course_id = dom['id']
-
-        try:
-            resources_page = self._get_resources_page(course_id)
-        except:
-            resources_page = None
-
-        resources_dom = None
-        if resources_page:
-            resources_dom = json.loads(resources_page)
-            if len(resources_dom['elements']) == 0:
-                resources_dom = None
 
         logging.info('Parsing syllabus of on-demand course. '
                      'This may take some time, please be patient ...')
@@ -120,27 +108,6 @@ class CourseraExtractor(PlatformExtractor):
                 json.dump(ondemand_material_items._items, file_object, indent=4)
 
         error_occured = False
-
-        all_resources = None
-        if resources_dom:
-            all_resources = resources_dom['elements']
-
-        resource_modules = []
-        if all_resources:
-            for resource in all_resources:
-                res_dl = []
-                resource_slug = resource['slug']
-                logging.info('Processing resource  %s',
-                             resource_slug)
-
-                links = course.extract_links_from_resource(resource['shortId'])
-                if links is None:
-                    error_occured = True
-                elif links:
-                    res_dl.append(('', links))
-
-                if res_dl:
-                    resource_modules.append((resource_slug, res_dl))
 
         for module in json_modules:
             module_slug = module['slug']
@@ -213,6 +180,39 @@ class CourseraExtractor(PlatformExtractor):
 
             if sections:
                 modules.append((module_slug, sections))
+
+        course_id = dom['id']
+        try:
+            resources_page = self._get_resources_page(course_id)
+        except:
+            resources_page = None
+
+        resources_dom = None
+        if resources_page:
+            resources_dom = json.loads(resources_page)
+            if len(resources_dom['elements']) == 0:
+                resources_dom = None
+
+        all_resources = None
+        if resources_dom:
+            all_resources = resources_dom['elements']
+
+        resource_modules = []
+        if all_resources:
+            for resource in all_resources:
+                res_dl = []
+                resource_slug = resource['slug']
+                logging.info('Processing resource  %s',
+                             resource_slug)
+
+                links = course.extract_links_from_resource(resource['shortId'])
+                if links is None:
+                    error_occured = True
+                elif links:
+                    res_dl.append(('', links))
+
+                if res_dl:
+                    resource_modules.append((resource_slug, res_dl))
 
         if resources_dom:
             modules.append(("Resources", resource_modules))
