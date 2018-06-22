@@ -5,15 +5,16 @@ Usually they do not download heavy content, except when necessary
 to parse course syllabus.
 """
 
+import os
 import abc
 import json
 import logging
 
 from .api import CourseraOnDemand, OnDemandCourseMaterialItems
-from .define import OPENCOURSE_CONTENT_URL
+from .define import OPENCOURSE_CONTENT_URL, OPENCOURSE_MEMBERSHIPS
 from .cookies import login
 from .network import get_page
-from .utils import is_debug_run
+from .utils import is_debug_run, clean_filename
 
 
 class PlatformExtractor(object):
@@ -31,6 +32,13 @@ class CourseraExtractor(PlatformExtractor):
         login(session, username, password)
         self._notebook_downloaded = False
         self._session = session
+        self._user_id = self.obtain_user_id()
+
+    def obtain_user_id(self):
+        reply = get_page(self._session, OPENCOURSE_MEMBERSHIPS, json=True)
+        elements = reply['elements']
+        user_id = elements[0]['userId'] if elements else None
+        return user_id
 
     def list_courses(self):
         """
@@ -50,9 +58,11 @@ class CourseraExtractor(PlatformExtractor):
                     download_quizzes=False, mathjax_cdn_url=None,
                     download_notebooks=False):
 
+        # Fixme: course_name == class_name?
+
         page = self._get_on_demand_syllabus(class_name)
         error_occurred, modules = self._parse_on_demand_syllabus(
-            page, reverse, unrestricted_filenames,
+            class_name, page, reverse, unrestricted_filenames,
             subtitle_language, video_resolution,
             download_quizzes, mathjax_cdn_url, download_notebooks)
         return error_occurred, modules
@@ -62,13 +72,13 @@ class CourseraExtractor(PlatformExtractor):
         Get the on-demand course listing webpage.
         """
 
-        url = OPENCOURSE_CONTENT_URL.format(class_name=class_name)
+        url = OPENCOURSE_CONTENT_URL.format(class_name=class_name, user_id=self._user_id)
         page = get_page(self._session, url)
         logging.info('Downloaded %s (%d bytes)', url, len(page))
 
         return page
 
-    def _parse_on_demand_syllabus(self, page, reverse=False,
+    def _parse_on_demand_syllabus(self, course_name, page, reverse=False,
                                   unrestricted_filenames=False,
                                   subtitle_language='en',
                                   video_resolution=None,
@@ -86,18 +96,18 @@ class CourseraExtractor(PlatformExtractor):
         """
 
         dom = json.loads(page)
-        course_name = dom['slug']
+        dom = dom['elements'][0]
 
         logging.info('Parsing syllabus of on-demand course. '
                      'This may take some time, please be patient ...')
         modules = []
-        json_modules = dom['courseMaterial']['elements']
-        course = CourseraOnDemand(session=self._session, course_id=dom['id'],
+        json_modules = dom['weeks']
+        course = CourseraOnDemand(session=self._session, course_id=dom['courseId'],
                                   course_name=course_name,
                                   unrestricted_filenames=unrestricted_filenames,
                                   mathjax_cdn_url=mathjax_cdn_url
                                   )
-        course.obtain_user_id()
+        course._user_id = self._user_id
         ondemand_material_items = OnDemandCourseMaterialItems.create(
             session=self._session, course_name=course_name)
 
@@ -109,16 +119,16 @@ class CourseraExtractor(PlatformExtractor):
 
         error_occurred = False
 
-        for module in json_modules:
-            module_slug = module['slug']
+        for module_idx, module in enumerate(json_modules):
+            module_slug = "week_%i" % (module_idx + 1,)
             logging.info('Processing module  %s', module_slug)
             sections = []
-            json_sections = module['elements']
+            json_sections = module['modules']
             for section in json_sections:
-                section_slug = section['slug']
+                section_slug = clean_filename(section["name"])
                 logging.info('Processing section     %s', section_slug)
                 lectures = []
-                json_lectures = section['elements']
+                json_lectures = section['items']
 
                 # Certain modules may be empty-looking programming assignments
                 # e.g. in data-structures, algorithms-on-graphs ondemand courses
@@ -129,8 +139,8 @@ class CourseraExtractor(PlatformExtractor):
                         json_lectures = [lecture]
 
                 for lecture in json_lectures:
-                    lecture_slug = lecture['slug']
-                    typename = lecture['content']['typeName']
+                    lecture_slug = os.path.split(lecture['resourcePath'])[-1]
+                    typename = lecture['contentSummary']['typeName']
 
                     logging.info('Processing lecture         %s (%s)',
                                  lecture_slug, typename)
@@ -139,8 +149,8 @@ class CourseraExtractor(PlatformExtractor):
                     links = {}
 
                     if typename == 'lecture':
-                        lecture_video_id = lecture['content']['definition']['videoId']
-                        assets = lecture['content']['definition'].get('assets', [])
+                        lecture_video_id = lecture['id']
+                        assets = lecture['contentSummary']['definition'].get('assets', [])
 
                         links = course.extract_links_from_lecture(
                             lecture_video_id, subtitle_language,

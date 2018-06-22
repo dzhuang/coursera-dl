@@ -856,7 +856,8 @@ class CourseraOnDemand(object):
 
         dom = get_page(self._session, OPENCOURSE_VIDEO_URL,
                        json=True,
-                       video_id=video_id)
+                       course_id=self._course_id,
+                       video_id=video_id).get('linked').get('onDemandVideos.v1')[0]
 
         logging.debug('Parsing JSON for video_id <%s>.', video_id)
         video_content = {}
@@ -864,26 +865,22 @@ class CourseraOnDemand(object):
         # videos
         logging.debug('Gathering video URLs for video_id <%s>.', video_id)
         sources = dom['sources']
-        sources.sort(key=lambda src: src['resolution'])
-        sources.reverse()
+        source_resolutions = sorted(sources['byResolution'].keys(), reverse=True)
 
         # Try to select resolution requested by the user.
-        filtered_sources = [source
-                            for source in sources
-                            if source['resolution'] == resolution]
-
-        if len(filtered_sources) == 0:
+        default_resolution = resolution
+        if resolution not in source_resolutions:
             # We will just use the 'vanilla' version of sources here, instead of
             # filtered_sources.
             logging.warning('Requested resolution %s not available for <%s>. '
                             'Downloading highest resolution available instead.',
                             resolution, video_id)
+            default_resolution = source_resolutions[0]
         else:
             logging.debug('Proceeding with download of resolution %s of <%s>.',
                           resolution, video_id)
-            sources = filtered_sources
 
-        video_url = sources[0]['formatSources']['video/mp4']
+        video_url = sources['byResolution'][default_resolution]['mp4VideoUrl']
         video_content['mp4'] = video_url
 
         subtitle_link = self._extract_subtitles_from_video_dom(
