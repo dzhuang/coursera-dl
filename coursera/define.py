@@ -988,3 +988,5 @@ OPENCOURSE_NOTEBOOK_DESCRIPTIONS = "https://hub.coursera-notebooks.org/hub/cours
 OPENCOURSE_NOTEBOOK_LAUNCHES = "https://api.coursera.org/api/onDemandNotebookWorkspaceLaunches.v1/?fields=authorizationId%2CcontentPath%2CuseLegacySystem"
 OPENCOURSE_NOTEBOOK_TREE = "https://hub.coursera-notebooks.org/user/{jupId}/api/contents/{path}?type=directory&_={timestamp}"
 OPENCOURSE_NOTEBOOK_DOWNLOAD = "https://hub.coursera-notebooks.org/user/{jupId}/files/{path}?download=1"
+
+OPENCOURSE_V1 = "https://www.coursera.org/api/courses.v1?q=slug&slug={class_name}&showHidden=true&fields=id,instructorIds"

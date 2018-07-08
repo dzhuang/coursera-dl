@@ -419,6 +419,7 @@ class ModuleV1(object):
     name = attr.ib()
     id = attr.ib()
     slug = attr.ib()
+    description = attr.ib()
     child_ids = attr.ib()
 
     def children(self, all_children):
@@ -436,6 +437,7 @@ class ModulesV1(object):
              ModuleV1(item['name'],
                       item['id'],
                       item['slug'],
+                      item['description'],
                       item['lessonIds']))
             for item in data
         ))
@@ -496,6 +498,37 @@ class ItemsV2(object):
         return ItemsV2(OrderedDict(
             (item['id'],
              ItemV2(item['name'],
+                    item['id'],
+                    item['slug'],
+                    item['contentSummary']['typeName'],
+                    item['lessonId'],
+                    item['moduleId']))
+            for item in data
+        ))
+
+    def __getitem__(self, key):
+        return self.children[key]
+
+
+@attr.s
+class AssetV1(object):
+    name = attr.ib()
+    id = attr.ib()
+    slug = attr.ib()
+    type_name = attr.ib()
+    lesson_id = attr.ib()
+    module_id = attr.ib()
+
+
+@attr.s
+class AssetsV1(object):
+    children = attr.ib()
+
+    @staticmethod
+    def from_json(data):
+        return AssetV1(OrderedDict(
+            (item['id'],
+             AssetV1(item['name'],
                     item['id'],
                     item['slug'],
                     item['contentSummary']['typeName'],

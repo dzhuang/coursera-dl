@@ -10,10 +10,12 @@ import json
 import logging
 
 from .api import (CourseraOnDemand, OnDemandCourseMaterialItemsV1,
-                  ModulesV1, LessonsV1, ItemsV2)
-from .define import OPENCOURSE_ONDEMAND_COURSE_MATERIALS_V2
+                  ModulesV1, LessonsV1, ItemsV2, AssetsV1)
+from .define import OPENCOURSE_ONDEMAND_COURSE_MATERIALS_V2, OPENCOURSE_V1
 from .network import get_page
 from .utils import is_debug_run, spit_json
+from .models import (
+    database, Course, Lesson, Module, Asset, Item, Reference, create_tables)
 
 
 class PlatformExtractor(object):
@@ -49,6 +51,21 @@ class CourseraExtractor(PlatformExtractor):
                     download_quizzes=False, mathjax_cdn_url=None,
                     download_notebooks=False):
 
+        from peewee import OperationalError
+        course_name_string, course_id = (
+            self._get_course_name_string_and_id(class_name))
+        try:
+            with database:
+                    Course.get_or_create(course_id=course_id,
+                                         course_name_string=course_name_string,
+                                         course_slug=class_name)
+        except OperationalError:
+            create_tables()
+            with database:
+                Course.get_or_create(course_id=course_id,
+                                     course_name_string=course_name_string,
+                                     course_slug=class_name)
+
         page = self._get_on_demand_syllabus(class_name)
         error_occurred, modules = self._parse_on_demand_syllabus(
             class_name,
@@ -57,6 +74,12 @@ class CourseraExtractor(PlatformExtractor):
             download_quizzes, mathjax_cdn_url, download_notebooks)
 
         return error_occurred, modules
+
+    def _get_course_name_string_and_id(self, class_name):
+        url = OPENCOURSE_V1.format(class_name=class_name)
+        page = get_page(self._session, url, json=True)
+        element = page["elements"][0]
+        return element["name"], element["id"]
 
     def _get_on_demand_syllabus(self, class_name):
         """
@@ -101,6 +124,9 @@ class CourseraExtractor(PlatformExtractor):
             course_name=course_name,
             unrestricted_filenames=unrestricted_filenames,
             mathjax_cdn_url=mathjax_cdn_url)
+
+        db_course = Course.get(course_id=class_id)
+
         course.obtain_user_id()
         ondemand_material_items = OnDemandCourseMaterialItemsV1.create(
             session=self._session, course_name=course_name)
@@ -119,6 +145,26 @@ class CourseraExtractor(PlatformExtractor):
             dom['linked']['onDemandCourseMaterialLessons.v1'])
         all_items = ItemsV2.from_json(
             dom['linked']['onDemandCourseMaterialItems.v2'])
+
+        with database:
+            for module in all_modules:
+                db_module, _ = Module.get_or_create(
+                    course=db_course,
+                    module_id=module.id, name=module.name,
+                    slug=module.slug, description=module.description)
+                for section in module.children(all_lessons):
+                    db_lesson, _ = Lesson.get_or_create(
+                        module=db_module, name=section.name, slug=section.slug,
+                        lesson_id=section.id)
+                    for item in section.children(all_items):
+                        db_item, _ = Item.get_or_create(
+                            lesson=db_lesson, module=db_module, item_id=item.id,
+                            name=item.name, slug=item.slug, type_name=item.type_name
+                        )
+
+        all_assets = ModulesV1.from_json(
+            dom['linked']['onDemandCourseMaterialModules.v1'])
+
 
         for module in all_modules:
             logging.info('Processing module  %s', module.slug)
