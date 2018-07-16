@@ -15,7 +15,7 @@ from .define import OPENCOURSE_ONDEMAND_COURSE_MATERIALS_V2, OPENCOURSE_V1
 from .network import get_page
 from .utils import is_debug_run, spit_json
 from .models import (
-    database, Course, Lesson, Module, Asset, Item, Reference, create_tables)
+    database, Course, Lesson, Module, CourseAsset, Item, Reference, create_tables)
 
 
 class PlatformExtractor(object):
@@ -146,31 +146,44 @@ class CourseraExtractor(PlatformExtractor):
         all_items = ItemsV2.from_json(
             dom['linked']['onDemandCourseMaterialItems.v2'])
 
-        with database:
-            for module in all_modules:
+        # with database:
+        #     for module in all_modules:
+        #         db_module, _ = Module.get_or_create(
+        #             course=db_course,
+        #             module_id=module.id, name=module.name,
+        #             slug=module.slug, description=module.description)
+        #         for section in module.children(all_lessons):
+        #             db_lesson, _ = Lesson.get_or_create(
+        #                 module=db_module, name=section.name, slug=section.slug,
+        #                 lesson_id=section.id)
+        #             for item in section.children(all_items):
+        #                 db_item, _ = Item.get_or_create(
+        #                     lesson=db_lesson, module=db_module, item_id=item.id,
+        #                     name=item.name, slug=item.slug, type_name=item.type_name
+        #                 )
+
+        all_assets = ModulesV1.from_json(
+            dom['linked']['onDemandCourseMaterialModules.v1'])
+        print(all_assets)
+
+        for module in all_modules:
+
+            with database:
                 db_module, _ = Module.get_or_create(
                     course=db_course,
                     module_id=module.id, name=module.name,
                     slug=module.slug, description=module.description)
-                for section in module.children(all_lessons):
-                    db_lesson, _ = Lesson.get_or_create(
-                        module=db_module, name=section.name, slug=section.slug,
-                        lesson_id=section.id)
-                    for item in section.children(all_items):
-                        db_item, _ = Item.get_or_create(
-                            lesson=db_lesson, module=db_module, item_id=item.id,
-                            name=item.name, slug=item.slug, type_name=item.type_name
-                        )
 
-        all_assets = ModulesV1.from_json(
-            dom['linked']['onDemandCourseMaterialModules.v1'])
-
-
-        for module in all_modules:
             logging.info('Processing module  %s', module.slug)
             lessons = []
             for section in module.children(all_lessons):
                 logging.info('Processing section     %s', section.slug)
+
+                with database:
+                    db_lesson, _ = Lesson.get_or_create(
+                        module=db_module, name=section.name, slug=section.slug,
+                        lesson_id=section.id)
+
                 lectures = []
                 available_lectures = section.children(all_items)
 
@@ -183,6 +196,12 @@ class CourseraExtractor(PlatformExtractor):
                         available_lectures = [lecture]
 
                 for lecture in available_lectures:
+                    with database:
+                        db_item, _ = Item.get_or_create(
+                            lesson=db_lesson, module=db_module, item_id=lecture.id,
+                            name=lecture.name, slug=lecture.slug, type_name=lecture.type_name
+                        )
+
                     typename = lecture.type_name
 
                     logging.info('Processing lecture         %s (%s)',
@@ -269,8 +288,14 @@ class CourseraExtractor(PlatformExtractor):
                 logging.info('Processing resource  %s',
                              reference_slug)
 
-                links = course.extract_links_from_reference(
-                    json_reference['shortId'])
+                ref_id = json_reference['id']
+                short_id = json_reference['shortId']
+                with database:
+                    Reference.get_or_create(
+                        ref_id=ref_id, short_id=short_id,
+                        name=json_reference["name"], slug=json_reference["slug"])
+
+                links = course.extract_links_from_reference(short_id)
                 if links is None:
                     error_occurred = True
                 elif links:

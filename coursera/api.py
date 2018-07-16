@@ -59,6 +59,7 @@ from .define import (OPENCOURSE_SUPPLEMENT_URL,
 
 
 from .cookies import prepare_auth_headers
+from .models import database, CourseAsset, Item, Reference
 
 
 class QuizExamToMarkupConverter(object):
@@ -245,8 +246,9 @@ class MarkupToHTMLConverter(object):
             asset = self._asset_retriever[image['assetid']]
             if asset.data is not None:
                 encoded64 = base64.b64encode(asset.data).decode()
-                image['src'] = 'data:%s;base64,%s' % (
-                    asset.content_type, encoded64)
+                if len(encoded64) <= 2000000:
+                    image['src'] = 'data:%s;base64,%s' % (
+                        asset.content_type, encoded64)
 
     def _convert_markup_audios(self, soup):
         """
@@ -1300,7 +1302,13 @@ class CourseraOnDemand(object):
                 extend_supplement_links(
                     supplement_content, self._extract_links_from_text(value))
 
-                instructions = (IN_MEMORY_MARKER + self._markup_to_html(value),
+                instructions_html = self._markup_to_html(value)
+                with database:
+                    db_item, _ = Item.get_or_create(item_id=element_id)
+                    db_item.content = instructions_html
+                    db_item.save()
+
+                instructions = (IN_MEMORY_MARKER + instructions_html,
                                 'instructions')
                 extend_supplement_links(
                     supplement_content, {IN_MEMORY_EXTENSION: [instructions]})
@@ -1407,6 +1415,13 @@ class CourseraOnDemand(object):
                 # Supplement lecture types are known to contain both <asset> tags
                 # and <a href> tags (depending on the course), so we extract
                 # both of them.
+
+                instructions_html = self._markup_to_html(value)
+                with database:
+                    db_ref, _ = Reference.get_or_create(short_id=short_id)
+                    db_ref.content = instructions_html
+                    db_ref.save()
+
                 extend_supplement_links(
                     resource_content, self._extract_links_from_text(value))
 
@@ -1579,7 +1594,7 @@ class CourseraOnDemand(object):
         supplement_links = {}
 
         # Build supplement links, providing nice titles along the way
-        for asset in asset_urls:
+        for i, asset in enumerate(asset_urls):
             title = clean_filename(
                 asset_tags_map[asset['id']]['name'],
                 self._unrestricted_filenames)
@@ -1589,7 +1604,7 @@ class CourseraOnDemand(object):
             url = asset['url'].strip()
             if extension not in supplement_links:
                 supplement_links[extension] = []
-            supplement_links[extension].append((url, title))
+            supplement_links[extension].append((url, title, ids[i]))
 
         return supplement_links
 

@@ -36,25 +36,29 @@ class Item(BaseModel):
     name = TextField(default="")
     slug = TextField(default="")
     type_name = CharField(default="")
+    content = TextField(default="")
 
 
-class Asset(BaseModel):
+class CourseAsset(BaseModel):
     asset_id = CharField(unique=True)
-    short_id = CharField(unique=True)
+    #short_id = CharField(unique=True)
+    asset_type = CharField()
     slug = TextField(default="")
     name = TextField(default="")
     value = TextField(default="")
+    saved_path = CharField(default="")
 
 
 class Reference(BaseModel):
     ref_id = CharField(unique=True)
+    course = ForeignKeyField(Course, backref="reference")
     short_id = CharField(unique=True)
-    asset = ForeignKeyField(Asset, backref="asset")
     slug = TextField(default="")
     name = TextField(default="")
     value = TextField(default="")
+    content = TextField(default="")
 
 
 def create_tables():
     with database:
-        database.create_tables([Course, Module, Lesson, Item, Asset])
+        database.create_tables([Course, Module, Lesson, Item, CourseAsset, Reference])

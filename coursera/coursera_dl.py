@@ -74,8 +74,6 @@ from .api import expand_specializations
 from .network import get_page, get_page_and_url
 from .commandline import parse_args
 from .extractors import CourseraExtractor
-from .models import (
-    database, Course, Lesson, Module, Asset, Item)
 
 from coursera import __version__
 
