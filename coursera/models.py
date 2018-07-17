@@ -1,5 +1,6 @@
 from peewee import Model, ForeignKeyField, SqliteDatabase, CharField, TextField
 
+
 database = SqliteDatabase("coursera-dl.db")
 
 
@@ -71,4 +72,7 @@ class Reference(BaseModel):
 
 def create_tables():
     with database:
-        database.create_tables([Course, Module, Lesson, Item, CourseAsset, ItemAsset, Reference, ItemVideoAsset])
+        database.create_tables(
+            [Course, Module, Lesson, Item, CourseAsset, ItemAsset,
+             Reference, ItemVideoAsset],
+            safe=True)

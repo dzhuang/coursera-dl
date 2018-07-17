@@ -172,7 +172,7 @@ class CourseraDownloader(CourseDownloader):
                         lecture_filename = normalize_path(
                             lecture.filename(resource.fmt, resource.title))
 
-                        if resource.asset_id:
+                        if resource.asset_id and not resource.asset_id.endswith("_video"):
                             with database:
                                 asset, __ = CourseAsset.get_or_create(asset_id=resource.asset_id)
 
@@ -221,16 +221,13 @@ class CourseraDownloader(CourseDownloader):
             asset_id = kwargs.pop("asset_id", None)
             fmt = kwargs.pop("fmt", None)
             saved_path = kwargs.pop("saved_path", None)
-            #is_lecture_asset = kwargs.pop("is_lecture_asset", False)
 
             if asset_id and asset_id.endswith("_video") and saved_path:
                 with database:
                     downloaded_asset, __ = ItemVideoAsset.get_or_create(asset_id=asset_id)
                     downloaded_asset.saved_path = saved_path
                     downloaded_asset.save()
-                    return
-
-            if asset_id and fmt and saved_path:
+            elif asset_id and fmt and saved_path:
                 with database:
                     downloaded_asset, __ = CourseAsset.get_or_create(asset_id=asset_id)
                     downloaded_asset.asset_type = fmt
@@ -288,7 +285,10 @@ class CourseraDownloader(CourseDownloader):
             if asset_id and asset_id.endswith("_video") and lecture_filename:
                 with database:
                     try:
-                        ItemVideoAsset.get(asset_id=asset_id)
+                        downloaded_asset = ItemVideoAsset.get(asset_id=asset_id)
+                        if downloaded_asset.saved_path != lecture_filename:
+                            downloaded_asset.saved_path = lecture_filename
+                            downloaded_asset.save()
                     except ItemVideoAsset.DoesNotExist:
                         downloaded_asset, __ = ItemVideoAsset.get_or_create(asset_id=asset_id)
                         downloaded_asset.saved_path = lecture_filename
@@ -296,7 +296,10 @@ class CourseraDownloader(CourseDownloader):
             elif asset_id and fmt and lecture_filename:
                 with database:
                     try:
-                        CourseAsset.get(asset_id=asset_id)
+                        downloaded_asset = CourseAsset.get(asset_id=asset_id)
+                        if downloaded_asset.saved_path != lecture_filename:
+                            downloaded_asset.saved_path = lecture_filename
+                            downloaded_asset.save()
                     except CourseAsset.DoesNotExist:
                         downloaded_asset, __ = CourseAsset.get_or_create(asset_id=asset_id)
                         downloaded_asset.asset_type = fmt
