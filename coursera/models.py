@@ -41,12 +41,22 @@ class Item(BaseModel):
 
 class CourseAsset(BaseModel):
     asset_id = CharField(unique=True)
-    #short_id = CharField(unique=True)
-    asset_type = CharField()
+    asset_type = CharField(default="")
     slug = TextField(default="")
     name = TextField(default="")
-    value = TextField(default="")
     saved_path = CharField(default="")
+
+
+class ItemVideoAsset(BaseModel):
+    asset_id = CharField(unique=True)
+    item = ForeignKeyField(Item, backref="itemvideoasset")
+    subtitles = CharField(default="")
+    saved_path = CharField(default="")
+
+
+class ItemAsset(BaseModel):
+    item = ForeignKeyField(Item, backref="itemasset")
+    asset = ForeignKeyField(CourseAsset, backref="itemasset")
 
 
 class Reference(BaseModel):
@@ -61,4 +71,4 @@ class Reference(BaseModel):
 
 def create_tables():
     with database:
-        database.create_tables([Course, Module, Lesson, Item, CourseAsset, Reference])
+        database.create_tables([Course, Module, Lesson, Item, CourseAsset, ItemAsset, Reference, ItemVideoAsset])

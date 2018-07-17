@@ -59,7 +59,7 @@ from .define import (OPENCOURSE_SUPPLEMENT_URL,
 
 
 from .cookies import prepare_auth_headers
-from .models import database, CourseAsset, Item, Reference
+from .models import database, CourseAsset, Item, Reference, ItemAsset, ItemVideoAsset
 
 
 class QuizExamToMarkupConverter(object):
@@ -166,7 +166,7 @@ class MarkupToHTMLConverter(object):
             mathjax_cdn_url = INSTRUCTIONS_HTML_MATHJAX_URL
         self._mathjax_cdn_url = mathjax_cdn_url
 
-    def __call__(self, markup):
+    def __call__(self, markup, add_css_js=True):
         """
         Convert instructions markup to make it more suitable for
         offline reading.
@@ -179,12 +179,12 @@ class MarkupToHTMLConverter(object):
         @rtype: str
         """
         soup = BeautifulSoup(markup)
-        self._convert_markup_basic(soup)
-        self._convert_markup_images(soup)
+        self._convert_markup_basic(soup, add_css_js)
+        #self._convert_markup_images(soup)
         self._convert_markup_audios(soup)
         return soup.prettify()
 
-    def _convert_markup_basic(self, soup):
+    def _convert_markup_basic(self, soup, add_css_js=True):
         """
         Perform basic conversion of instructions markup. This includes
         replacement of several textual markup tags with their HTML equivalents.
@@ -193,16 +193,18 @@ class MarkupToHTMLConverter(object):
         @type soup: BeautifulSoup
         """
         # Inject meta charset tag
-        meta = soup.new_tag('meta', charset='UTF-8')
-        soup.insert(0, meta)
+        if add_css_js:
+            meta = soup.new_tag('meta', charset='UTF-8')
+            soup.insert(0, meta)
 
         # 1. Inject basic CSS style
-        css = "".join([
-            INSTRUCTIONS_HTML_INJECTION_PRE,
-            self._mathjax_cdn_url,
-            INSTRUCTIONS_HTML_INJECTION_AFTER])
-        css_soup = BeautifulSoup(css)
-        soup.append(css_soup)
+        if add_css_js:
+            css = "".join([
+                INSTRUCTIONS_HTML_INJECTION_PRE,
+                self._mathjax_cdn_url,
+                INSTRUCTIONS_HTML_INJECTION_AFTER])
+            css_soup = BeautifulSoup(css)
+            soup.append(css_soup)
 
         # 2. Replace <text> with <p>
         while soup.find('text'):
@@ -676,7 +678,7 @@ class CourseraOnDemand(object):
         try:
             session_id = self._get_exam_session_id(exam_id)
             exam_json = self._get_exam_json(exam_id, session_id)
-            return self._convert_quiz_json_to_links(exam_json, 'exam')
+            return self._convert_quiz_json_to_links(exam_json, 'exam', exam_id)
         except requests.exceptions.HTTPError as exception:
             logging.error('Could not download exam %s: %s', exam_id, exception)
             if is_debug_run():
@@ -815,7 +817,7 @@ class CourseraOnDemand(object):
         try:
             session_id = self._get_quiz_session_id(quiz_id)
             quiz_json = self._get_quiz_json(quiz_id, session_id)
-            return self._convert_quiz_json_to_links(quiz_json, 'quiz')
+            return self._convert_quiz_json_to_links(quiz_json, 'quiz', quiz_id)
         except requests.exceptions.HTTPError as exception:
             logging.error('Could not download quiz %s: %s', quiz_id, exception)
             if is_debug_run():
@@ -823,10 +825,15 @@ class CourseraOnDemand(object):
                     'Could not download quiz %s: %s', quiz_id, exception)
             return None
 
-    def _convert_quiz_json_to_links(self, quiz_json, filename_suffix):
+    def _convert_quiz_json_to_links(self, quiz_json, filename_suffix, quiz_id):
         markup = self._quiz_to_markup(quiz_json)
-        html = self._markup_to_html(markup)
 
+        with database:
+            db_item, _ = Item.get_or_create(item_id=quiz_id)
+            db_item.content = self._markup_to_html(markup, add_css_js=False)
+            db_item.save()
+
+        html = self._markup_to_html(markup)
         supplement_links = {}
         instructions = (IN_MEMORY_MARKER + html, filename_suffix)
         extend_supplement_links(
@@ -918,8 +925,9 @@ class CourseraOnDemand(object):
 
             assets = self._get_lecture_asset_ids(course_id, video_id)
             assets = self._normalize_assets(assets)
+
             extend_supplement_links(
-                links, self._extract_links_from_lecture_assets(assets))
+                links, self._extract_links_from_lecture_assets(assets, video_id))
 
             return links
         except requests.exceptions.HTTPError as exception:
@@ -967,7 +975,7 @@ class CourseraOnDemand(object):
 
         return new_assets
 
-    def _extract_links_from_lecture_assets(self, asset_ids):
+    def _extract_links_from_lecture_assets(self, asset_ids, lecture_id):
         """
         Extract links to files of the asset ids.
 
@@ -978,7 +986,7 @@ class CourseraOnDemand(object):
         """
         links = {}
 
-        def _add_asset(name, url, destination):
+        def _add_asset(name, url, asset_id, destination):
             filename, extension = os.path.splitext(clean_url(name))
             if extension is '':
                 return
@@ -993,15 +1001,15 @@ class CourseraOnDemand(object):
 
             if extension not in destination:
                 destination[extension] = []
-            destination[extension].append((url, basename))
+            destination[extension].append((url, basename, asset_id))
 
         for asset_id in asset_ids:
-            for asset in self._get_asset_urls(asset_id):
-                _add_asset(asset['name'], asset['url'], links)
+            for asset in self._get_lecture_asset_urls(asset_id, lecture_id):
+                _add_asset(asset['name'], asset['url'], asset['asset_id'], links)
 
         return links
 
-    def _get_asset_urls(self, asset_id):
+    def _get_lecture_asset_urls(self, asset_id, lecture_id):
         """
         Get list of asset urls and file names. This method may internally
         use AssetRetriever to extract `asset` element types.
@@ -1036,9 +1044,19 @@ class CourseraOnDemand(object):
             #
             if typeName == 'asset':
                 open_course_asset_id = definition['assetId']
+                asset_verbose_name = definition['name']
+
                 for asset in self._asset_retriever([open_course_asset_id],
                                                    download=False):
-                    urls.append({'name': asset.name, 'url': asset.url})
+                    urls.append({'name': asset.name, 'url': asset.url, 'asset_id': open_course_asset_id})
+                    with database:
+                        db_asset, _ = CourseAsset.get_or_create(asset_id=open_course_asset_id)
+                        db_asset.name = asset_verbose_name
+                        db_asset.slug = asset.name
+                        db_asset.save()
+
+                        lecture = Item.get(item_id=lecture_id)
+                        ItemAsset.get_or_create(item=lecture, asset=db_asset)
 
             # Elements of `url` types look as follows:
             #
@@ -1096,12 +1114,21 @@ class CourseraOnDemand(object):
         subtitle_link = self._extract_subtitles_from_video_dom(
             dom, subtitle_language, video_id)
 
+        subtitles = ",".join(subtitle_link.keys())
+
         for key, value in iteritems(subtitle_link):
             video_content[key] = value
 
         lecture_video_content = {}
         for key, value in iteritems(video_content):
-            lecture_video_content[key] = [(value, '')]
+            if key == "mp4":
+                video_asset_id = dom['id'] + "_video"
+                with database:
+                    item = Item.get(item_id=video_id)
+                    ItemVideoAsset.get_or_create(asset_id=video_asset_id, item=item, subtitles=subtitles)
+                lecture_video_content[key] = [(value, '', video_asset_id)]
+            else:
+                lecture_video_content[key] = [(value, '')]
 
         return lecture_video_content
 
@@ -1111,6 +1138,7 @@ class CourseraOnDemand(object):
         subtitle_nodes = [
             ('subtitles', 'srt', 'subtitle'),
             ('subtitlesTxt', 'txt', 'transcript'),
+            ('subtitlesVtt', 'vtt', 'subtitle'),
         ]
         subtitle_set_download = set()
         subtitle_set_nonexist = set()
@@ -1302,13 +1330,12 @@ class CourseraOnDemand(object):
                 extend_supplement_links(
                     supplement_content, self._extract_links_from_text(value))
 
-                instructions_html = self._markup_to_html(value)
                 with database:
                     db_item, _ = Item.get_or_create(item_id=element_id)
-                    db_item.content = instructions_html
+                    db_item.content = self._markup_to_html(value, add_css_js=False)
                     db_item.save()
 
-                instructions = (IN_MEMORY_MARKER + instructions_html,
+                instructions = (IN_MEMORY_MARKER + self._markup_to_html(value),
                                 'instructions')
                 extend_supplement_links(
                     supplement_content, {IN_MEMORY_EXTENSION: [instructions]})

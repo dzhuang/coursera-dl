@@ -45,26 +45,29 @@ class CourseraExtractor(PlatformExtractor):
                                   course_name=None)
         return course.list_courses()
 
-    def get_modules(self, class_name,
-                    reverse=False, unrestricted_filenames=False,
-                    subtitle_language='en', video_resolution=None,
-                    download_quizzes=False, mathjax_cdn_url=None,
-                    download_notebooks=False):
-
+    def create_db_course(self, class_name):
         from peewee import OperationalError
+
         course_name_string, course_id = (
             self._get_course_name_string_and_id(class_name))
+
         try:
             with database:
-                    Course.get_or_create(course_id=course_id,
-                                         course_name_string=course_name_string,
-                                         course_slug=class_name)
+                Course.get_or_create(course_id=course_id,
+                                     course_name_string=course_name_string,
+                                     course_slug=class_name)
         except OperationalError:
             create_tables()
             with database:
                 Course.get_or_create(course_id=course_id,
                                      course_name_string=course_name_string,
                                      course_slug=class_name)
+
+    def get_modules(self, class_name,
+                    reverse=False, unrestricted_filenames=False,
+                    subtitle_language='en', video_resolution=None,
+                    download_quizzes=False, mathjax_cdn_url=None,
+                    download_notebooks=False):
 
         page = self._get_on_demand_syllabus(class_name)
         error_occurred, modules = self._parse_on_demand_syllabus(
@@ -293,6 +296,7 @@ class CourseraExtractor(PlatformExtractor):
                 with database:
                     Reference.get_or_create(
                         ref_id=ref_id, short_id=short_id,
+                        course=db_course,
                         name=json_reference["name"], slug=json_reference["slug"])
 
                 links = course.extract_links_from_reference(short_id)

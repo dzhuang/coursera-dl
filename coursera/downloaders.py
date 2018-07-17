@@ -44,11 +44,13 @@ class Downloader(object):
         """
         raise NotImplementedError("Subclasses should implement this")
 
-    def download(self, url, filename, resume=False):
+    def download(self, url, filename, resume=False, **kwargs):
         """
         Download the given url to the given file. When the download
         is aborted by the user, the partially downloaded file is also removed.
         """
+
+        resume = kwargs.pop("resume", resume)
 
         try:
             self._start_download(url, filename, resume)

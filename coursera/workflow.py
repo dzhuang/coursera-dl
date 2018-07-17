@@ -13,6 +13,7 @@ from .playlist import create_m3u_playlist
 from .utils import is_course_complete, mkdir_p, normalize_path
 from .filtering import find_resources_to_get, skip_format_url
 from .define import IN_MEMORY_MARKER
+from .models import database, CourseAsset, ItemAsset, ItemVideoAsset
 
 
 def _iter_modules(modules, class_name, path, ignored_formats, args):
@@ -84,14 +85,15 @@ def _iter_modules(modules, class_name, path, ignored_formats, args):
                 self._lecture, file_formats, resource_filter,
                 ignored_formats)
 
-            for fmt, url, title in resources_to_get:
-                yield IterResource(fmt, url, title)
+            for fmt, url, title, asset_id in resources_to_get:
+                yield IterResource(fmt, url, title, asset_id)
 
     class IterResource(object):
-        def __init__(self, fmt, url, title):
+        def __init__(self, fmt, url, title, asset_id):
             self.fmt = fmt
             self.url = url
             self.title = title
+            self.asset_id = asset_id
 
     for index, module in enumerate(modules):
         yield IterModule(index, module)
@@ -150,6 +152,15 @@ class CourseraDownloader(CourseDownloader):
             modules, self._class_name, self._path,
             self._ignored_formats, self._args)
 
+        def get_resource_db_slug(resource_title, fmt):
+            if not fmt:
+                return resource_title
+            fmt = "." + fmt.lstrip(".")
+            if resource_title.endswith(fmt):
+                return resource_title
+
+            return resource_title + fmt
+
         for module in modules:
             last_update = -1
             for section in module.sections:
@@ -160,8 +171,23 @@ class CourseraDownloader(CourseDownloader):
                     for resource in lecture.resources:
                         lecture_filename = normalize_path(
                             lecture.filename(resource.fmt, resource.title))
+
+                        if resource.asset_id:
+                            with database:
+                                asset, __ = CourseAsset.get_or_create(asset_id=resource.asset_id)
+
+                                if not asset.asset_type:
+                                    asset.asset_type = resource.fmt
+
+                                slug = get_resource_db_slug(resource.title, resource.fmt)
+                                if not asset.slug:
+                                    asset.slug = slug
+                                if not asset.name:
+                                    asset.name = resource.title
+                                asset.save()
+
                         last_update = self._handle_resource(
-                            resource.url, resource.fmt, lecture_filename,
+                            resource.url, resource.fmt, resource.asset_id, lecture_filename,
                             self._download_completion_handler, last_update)
 
                 # After fetching resources, create a playlist in M3U format with the
@@ -183,7 +209,7 @@ class CourseraDownloader(CourseDownloader):
         self._downloader.join()
         return completed
 
-    def _download_completion_handler(self, url, result):
+    def _download_completion_handler(self, url, result, **kwargs):
         if isinstance(result, requests.exceptions.RequestException):
             logging.error('The following error has occurred while '
                           'downloading URL %s: %s', url, str(result))
@@ -191,8 +217,27 @@ class CourseraDownloader(CourseDownloader):
         elif isinstance(result, Exception):
             logging.error('Unknown exception occurred: %s', result)
             self.failed_urls.append(url)
+        else:
+            asset_id = kwargs.pop("asset_id", None)
+            fmt = kwargs.pop("fmt", None)
+            saved_path = kwargs.pop("saved_path", None)
+            #is_lecture_asset = kwargs.pop("is_lecture_asset", False)
 
-    def _handle_resource(self, url, fmt, lecture_filename, callback, last_update):
+            if asset_id and asset_id.endswith("_video") and saved_path:
+                with database:
+                    downloaded_asset, __ = ItemVideoAsset.get_or_create(asset_id=asset_id)
+                    downloaded_asset.saved_path = saved_path
+                    downloaded_asset.save()
+                    return
+
+            if asset_id and fmt and saved_path:
+                with database:
+                    downloaded_asset, __ = CourseAsset.get_or_create(asset_id=asset_id)
+                    downloaded_asset.asset_type = fmt
+                    downloaded_asset.saved_path = saved_path
+                    downloaded_asset.save()
+
+    def _handle_resource(self, url, fmt, asset_id, lecture_filename, callback, last_update):
         """
         Handle resource. This function builds up resource file name and
         downloads it if necessary.
@@ -233,11 +278,31 @@ class CourseraDownloader(CourseDownloader):
                         self.skipped_urls.append(url)
                     else:
                         logging.info('Downloading: %s', lecture_filename)
-                        self._downloader.download(callback, url, lecture_filename, resume=resume)
+                        self._downloader.download(
+                            callback, url, lecture_filename, resume=resume,
+                            fmt=fmt, asset_id=asset_id, saved_path=lecture_filename)
             else:
                 open(lecture_filename, 'w').close()  # touch
             last_update = time.time()
         else:
+            if asset_id and asset_id.endswith("_video") and lecture_filename:
+                with database:
+                    try:
+                        ItemVideoAsset.get(asset_id=asset_id)
+                    except ItemVideoAsset.DoesNotExist:
+                        downloaded_asset, __ = ItemVideoAsset.get_or_create(asset_id=asset_id)
+                        downloaded_asset.saved_path = lecture_filename
+                        downloaded_asset.save()
+            elif asset_id and fmt and lecture_filename:
+                with database:
+                    try:
+                        CourseAsset.get(asset_id=asset_id)
+                    except CourseAsset.DoesNotExist:
+                        downloaded_asset, __ = CourseAsset.get_or_create(asset_id=asset_id)
+                        downloaded_asset.asset_type = fmt
+                        downloaded_asset.saved_path = lecture_filename
+                        downloaded_asset.save()
+
             logging.info('%s already downloaded', lecture_filename)
             # if this file hasn't been modified in a long time,
             # record that time

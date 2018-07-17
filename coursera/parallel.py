@@ -42,7 +42,7 @@ class ConsecutiveDownloader(AbstractDownloader):
     """
     def download(self, callback, url, *args, **kwargs):
         _, result = self._download_wrapper(url, *args, **kwargs)
-        callback(url, result)
+        callback(url, result, **kwargs)
         return result
 
     def join(self):
@@ -60,7 +60,7 @@ class ParallelDownloader(AbstractDownloader):
     def download(self, callback, url, *args, **kwargs):
         callback_wrapper = lambda payload: callback(*payload)
         return self._pool.apply_async(
-            self._download_wrapper, (url,) + args, kwargs,
+            self._download_wrapper, (url, ) + args, kwargs,
             callback=callback_wrapper)
 
     def join(self):

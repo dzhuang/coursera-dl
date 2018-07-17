@@ -126,6 +126,7 @@ def download_on_demand_class(session, args, class_name):
 
     error_occurred = False
     extractor = CourseraExtractor(session)
+    extractor.create_db_course(class_name)
 
     cached_syllabus_filename = '%s-syllabus-parsed.json' % class_name
     if args.cache_syllabus and os.path.isfile(cached_syllabus_filename):

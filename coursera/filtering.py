@@ -14,8 +14,10 @@ VALID_FORMATS = r"""^mp4$|
                     ^pdf$|
                     ^.?.?\.?txt$|
                     ^.?.?\.?srt$|
+                    ^.?.?\.?vtt$|
                     .*txt$|
                     .*srt$|
+                    .*vtt$|
                     ^html?$|
                     ^zip$|
                     ^rar$|
@@ -109,7 +111,12 @@ def find_resources_to_get(lecture, file_formats, resource_filter, ignored_format
                     logging.debug('Skipping b/c of rf: %s %s',
                                   resource_filter, r[1])
                     continue
-                resources_to_get.append((fmt0, r[0], r[1]))
+                try:
+                    asset_id = r[2]
+                except IndexError:
+                    asset_id = None
+
+                resources_to_get.append((fmt0, r[0], r[1], asset_id))
         else:
             logging.debug(
                 'Skipping b/c format %s not in %s', fmt, file_formats)
