@@ -1125,7 +1125,13 @@ class CourseraOnDemand(object):
                 video_asset_id = dom['id'] + "_video"
                 with database:
                     item = Item.get(item_id=video_id)
-                    ItemVideoAsset.get_or_create(asset_id=video_asset_id, item=item, subtitles=subtitles)
+                    try:
+                        item_video = ItemVideoAsset.get(asset_id=video_asset_id)
+                        item_video.item = item
+                        item_video.subtitles = subtitles
+                        item_video.save()
+                    except ItemVideoAsset.DoesNotExist:
+                        ItemVideoAsset.get_or_create(asset_id=video_asset_id, item=item, subtitles=subtitles)
                 lecture_video_content[key] = [(value, '', video_asset_id)]
             else:
                 lecture_video_content[key] = [(value, '')]
@@ -1216,6 +1222,11 @@ class CourseraOnDemand(object):
             if not text:
                 return {}
 
+            with database:
+                db_item, _ = Item.get_or_create(item_id=element_id)
+                db_item.content = self._markup_to_html(text, add_css_js=False)
+                db_item.save()
+
             supplement_links = self._extract_links_from_text(text)
             instructions = (IN_MEMORY_MARKER + self._markup_to_html(text),
                             'instructions')
@@ -1250,6 +1261,11 @@ class CourseraOnDemand(object):
             if not text:
                 return {}
 
+            with database:
+                db_item, _ = Item.get_or_create(item_id=element_id)
+                db_item.content = self._markup_to_html(text, add_css_js=False)
+                db_item.save()
+
             supplement_links = self._extract_links_from_text(text)
             instructions = (IN_MEMORY_MARKER + self._markup_to_html(text),
                             'instructions')
@@ -1283,6 +1299,11 @@ class CourseraOnDemand(object):
             text = ''.join(self._extract_peer_assignment_text(element_id))
             if not text:
                 return {}
+
+            with database:
+                db_item, _ = Item.get_or_create(item_id=element_id)
+                db_item.content = self._markup_to_html(text, add_css_js=False)
+                db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
             instructions = (IN_MEMORY_MARKER + self._markup_to_html(text),
@@ -1443,10 +1464,9 @@ class CourseraOnDemand(object):
                 # and <a href> tags (depending on the course), so we extract
                 # both of them.
 
-                instructions_html = self._markup_to_html(value)
                 with database:
                     db_ref, _ = Reference.get_or_create(short_id=short_id)
-                    db_ref.content = instructions_html
+                    db_ref.content = self._markup_to_html(value, add_css_js=False)
                     db_ref.save()
 
                 extend_supplement_links(
