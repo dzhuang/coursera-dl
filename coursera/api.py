@@ -180,7 +180,7 @@ class MarkupToHTMLConverter(object):
         """
         soup = BeautifulSoup(markup)
         self._convert_markup_basic(soup, add_css_js)
-        #self._convert_markup_images(soup)
+        self._convert_markup_images(soup)
         self._convert_markup_audios(soup)
         return soup.prettify()
 
