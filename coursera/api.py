@@ -1005,7 +1005,7 @@ class CourseraOnDemand(object):
 
         for asset_id in asset_ids:
             for asset in self._get_lecture_asset_urls(asset_id, lecture_id):
-                _add_asset(asset['name'], asset['url'], asset['asset_id'], links)
+                _add_asset(asset['name'], asset['url'], asset.get('asset_id', ''), links)
 
         return links
 
