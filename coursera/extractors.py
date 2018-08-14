@@ -149,26 +149,6 @@ class CourseraExtractor(PlatformExtractor):
         all_items = ItemsV2.from_json(
             dom['linked']['onDemandCourseMaterialItems.v2'])
 
-        # with database:
-        #     for module in all_modules:
-        #         db_module, _ = Module.get_or_create(
-        #             course=db_course,
-        #             module_id=module.id, name=module.name,
-        #             slug=module.slug, description=module.description)
-        #         for section in module.children(all_lessons):
-        #             db_lesson, _ = Lesson.get_or_create(
-        #                 module=db_module, name=section.name, slug=section.slug,
-        #                 lesson_id=section.id)
-        #             for item in section.children(all_items):
-        #                 db_item, _ = Item.get_or_create(
-        #                     lesson=db_lesson, module=db_module, item_id=item.id,
-        #                     name=item.name, slug=item.slug, type_name=item.type_name
-        #                 )
-
-        all_assets = ModulesV1.from_json(
-            dom['linked']['onDemandCourseMaterialModules.v1'])
-        print(all_assets)
-
         for module in all_modules:
 
             with database:
