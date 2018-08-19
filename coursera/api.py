@@ -182,7 +182,7 @@ class MarkupToHTMLConverter(object):
         self._convert_markup_basic(soup, add_css_js)
         self._convert_markup_images(soup, to_b64)
         self._convert_markup_audios(soup, to_b64)
-        return soup.prettify()
+        return soup.prettify().replace("\t", "    ")
 
     def _convert_markup_basic(self, soup, add_css_js=True):
         """
