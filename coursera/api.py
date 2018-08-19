@@ -166,7 +166,7 @@ class MarkupToHTMLConverter(object):
             mathjax_cdn_url = INSTRUCTIONS_HTML_MATHJAX_URL
         self._mathjax_cdn_url = mathjax_cdn_url
 
-    def __call__(self, markup, add_css_js=True):
+    def __call__(self, markup, add_css_js=True, to_b64=True):
         """
         Convert instructions markup to make it more suitable for
         offline reading.
@@ -180,8 +180,8 @@ class MarkupToHTMLConverter(object):
         """
         soup = BeautifulSoup(markup)
         self._convert_markup_basic(soup, add_css_js)
-        self._convert_markup_images(soup)
-        self._convert_markup_audios(soup)
+        self._convert_markup_images(soup, to_b64)
+        self._convert_markup_audios(soup, to_b64)
         return soup.prettify()
 
     def _convert_markup_basic(self, soup, add_css_js=True):
@@ -225,7 +225,7 @@ class MarkupToHTMLConverter(object):
             type_ = list_.attrs.get('bullettype', 'numbers')
             list_.name = 'ol' if type_ == 'numbers' else 'ul'
 
-    def _convert_markup_images(self, soup):
+    def _convert_markup_images(self, soup, to_b64=True):
         """
         Convert images of instructions markup. Images are downloaded,
         base64-encoded and inserted into <img> tags.
@@ -245,14 +245,16 @@ class MarkupToHTMLConverter(object):
 
         for image in images:
             # Encode each image using base64
+            src = ""
             asset = self._asset_retriever[image['assetid']]
-            if asset.data is not None:
-                encoded64 = base64.b64encode(asset.data).decode()
-                if len(encoded64) <= 2000000:
-                    image['src'] = 'data:%s;base64,%s' % (
-                        asset.content_type, encoded64)
+            if to_b64:
+                if asset.data is not None:
+                    encoded64 = base64.b64encode(asset.data).decode()
+                    if len(encoded64) <= 2000000:
+                        src ='data:%s;base64,%s' % (asset.content_type, encoded64)
+            image['src'] = src
 
-    def _convert_markup_audios(self, soup):
+    def _convert_markup_audios(self, soup, to_b64=True):
         """
         Convert audios of instructions markup. Audios are downloaded,
         base64-encoded and inserted as <audio controls> <source> tag.
@@ -275,9 +277,11 @@ class MarkupToHTMLConverter(object):
             # Encode each audio using base64
             asset = self._asset_retriever[audio['id']]
             if asset.data is not None:
-                encoded64 = base64.b64encode(asset.data).decode()
-                data_string = 'data:%s;base64,%s' % (
-                    asset.content_type, encoded64)
+                data_string = ""
+                if to_b64:
+                    encoded64 = base64.b64encode(asset.data).decode()
+                    data_string = 'data:%s;base64,%s' % (
+                        asset.content_type, encoded64)
 
                 source_tag = soup.new_tag(
                     'source', src=data_string, type=asset.content_type)
@@ -830,7 +834,7 @@ class CourseraOnDemand(object):
 
         with database:
             db_item, _ = Item.get_or_create(item_id=quiz_id)
-            db_item.content = self._markup_to_html(markup, add_css_js=False)
+            db_item.content = self._markup_to_html(markup, add_css_js=False, to_b64=False)
             db_item.save()
 
         html = self._markup_to_html(markup)
@@ -1224,7 +1228,7 @@ class CourseraOnDemand(object):
 
             with database:
                 db_item, _ = Item.get_or_create(item_id=element_id)
-                db_item.content = self._markup_to_html(text, add_css_js=False)
+                db_item.content = self._markup_to_html(text, add_css_js=False, to_b64=False)
                 db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
@@ -1263,7 +1267,7 @@ class CourseraOnDemand(object):
 
             with database:
                 db_item, _ = Item.get_or_create(item_id=element_id)
-                db_item.content = self._markup_to_html(text, add_css_js=False)
+                db_item.content = self._markup_to_html(text, add_css_js=False, to_b64=False)
                 db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
@@ -1302,7 +1306,7 @@ class CourseraOnDemand(object):
 
             with database:
                 db_item, _ = Item.get_or_create(item_id=element_id)
-                db_item.content = self._markup_to_html(text, add_css_js=False)
+                db_item.content = self._markup_to_html(text, add_css_js=False, to_b64=False)
                 db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
@@ -1353,7 +1357,7 @@ class CourseraOnDemand(object):
 
                 with database:
                     db_item, _ = Item.get_or_create(item_id=element_id)
-                    db_item.content = self._markup_to_html(value, add_css_js=False)
+                    db_item.content = self._markup_to_html(value, add_css_js=False, to_b64=False)
                     db_item.save()
 
                 instructions = (IN_MEMORY_MARKER + self._markup_to_html(value),
@@ -1466,7 +1470,7 @@ class CourseraOnDemand(object):
 
                 with database:
                     db_ref, _ = Reference.get_or_create(short_id=short_id)
-                    db_ref.content = self._markup_to_html(value, add_css_js=False)
+                    db_ref.content = self._markup_to_html(value, add_css_js=False, to_b64=False)
                     db_ref.save()
 
                 extend_supplement_links(
