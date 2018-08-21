@@ -233,6 +233,10 @@ class MarkupToHTMLConverter(object):
         @param soup: BeautifulSoup instance.
         @type soup: BeautifulSoup
         """
+
+        if not to_b64:
+            return
+
         # 6. Replace <img> assets with actual image contents
         images = [image for image in soup.find_all('img')
                   if image.attrs.get('assetid') is not None]
@@ -245,14 +249,12 @@ class MarkupToHTMLConverter(object):
 
         for image in images:
             # Encode each image using base64
-            src = ""
             asset = self._asset_retriever[image['assetid']]
-            if to_b64:
-                if asset.data is not None:
-                    encoded64 = base64.b64encode(asset.data).decode()
-                    if len(encoded64) <= 2000000:
-                        src ='data:%s;base64,%s' % (asset.content_type, encoded64)
-            image['src'] = src
+            if asset.data is not None:
+                encoded64 = base64.b64encode(asset.data).decode()
+                if len(encoded64) <= 2000000:
+                    image['src'] = 'data:%s;base64,%s' % (
+                        asset.content_type, encoded64)
 
     def _convert_markup_audios(self, soup, to_b64=True):
         """
@@ -262,6 +264,9 @@ class MarkupToHTMLConverter(object):
         @param soup: BeautifulSoup instance.
         @type soup: BeautifulSoup
         """
+        if not to_b64:
+            return
+
         # 7. Replace <asset> audio assets with actual audio contents
         audios = [audio for audio in soup.find_all('asset')
                   if audio.attrs.get('id') is not None
@@ -277,11 +282,9 @@ class MarkupToHTMLConverter(object):
             # Encode each audio using base64
             asset = self._asset_retriever[audio['id']]
             if asset.data is not None:
-                data_string = ""
-                if to_b64:
-                    encoded64 = base64.b64encode(asset.data).decode()
-                    data_string = 'data:%s;base64,%s' % (
-                        asset.content_type, encoded64)
+                encoded64 = base64.b64encode(asset.data).decode()
+                data_string = 'data:%s;base64,%s' % (
+                    asset.content_type, encoded64)
 
                 source_tag = soup.new_tag(
                     'source', src=data_string, type=asset.content_type)
