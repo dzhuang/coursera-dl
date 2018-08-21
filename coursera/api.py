@@ -252,9 +252,8 @@ class MarkupToHTMLConverter(object):
             asset = self._asset_retriever[image['assetid']]
             if asset.data is not None:
                 encoded64 = base64.b64encode(asset.data).decode()
-                if len(encoded64) <= 2000000:
-                    image['src'] = 'data:%s;base64,%s' % (
-                        asset.content_type, encoded64)
+                image['src'] = 'data:%s;base64,%s' % (
+                    asset.content_type, encoded64)
 
     def _convert_markup_audios(self, soup, to_b64=True):
         """
@@ -840,7 +839,7 @@ class CourseraOnDemand(object):
             db_item.content = self._markup_to_html(markup, add_css_js=False, to_b64=False)
             db_item.save()
 
-        html = self._markup_to_html(markup)
+        html = self._markup_to_html(markup, to_b64=False)
         supplement_links = {}
         instructions = (IN_MEMORY_MARKER + html, filename_suffix)
         extend_supplement_links(
@@ -1235,7 +1234,7 @@ class CourseraOnDemand(object):
                 db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
-            instructions = (IN_MEMORY_MARKER + self._markup_to_html(text),
+            instructions = (IN_MEMORY_MARKER + self._markup_to_html(text, to_b64=False),
                             'instructions')
             extend_supplement_links(
                 supplement_links, {IN_MEMORY_EXTENSION: [instructions]})
@@ -1274,7 +1273,7 @@ class CourseraOnDemand(object):
                 db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
-            instructions = (IN_MEMORY_MARKER + self._markup_to_html(text),
+            instructions = (IN_MEMORY_MARKER + self._markup_to_html(text, to_b64=False),
                             'instructions')
             extend_supplement_links(
                 supplement_links, {IN_MEMORY_EXTENSION: [instructions]})
@@ -1313,7 +1312,7 @@ class CourseraOnDemand(object):
                 db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
-            instructions = (IN_MEMORY_MARKER + self._markup_to_html(text),
+            instructions = (IN_MEMORY_MARKER + self._markup_to_html(text, to_b64=False),
                             'peer_assignment_instructions')
             extend_supplement_links(
                 supplement_links, {IN_MEMORY_EXTENSION: [instructions]})
@@ -1363,7 +1362,7 @@ class CourseraOnDemand(object):
                     db_item.content = self._markup_to_html(value, add_css_js=False, to_b64=False)
                     db_item.save()
 
-                instructions = (IN_MEMORY_MARKER + self._markup_to_html(value),
+                instructions = (IN_MEMORY_MARKER + self._markup_to_html(value, to_b64=False),
                                 'instructions')
                 extend_supplement_links(
                     supplement_content, {IN_MEMORY_EXTENSION: [instructions]})
@@ -1397,9 +1396,42 @@ class CourseraOnDemand(object):
         soup = BeautifulSoup(text)
         asset_tags_map = {}
 
+        exist_asset_names = []
         for asset in soup.find_all('asset'):
-            asset_tags_map[asset['id']] = {'name': asset['name'],
+            asset_name = asset['name']
+            name, extension = os.path.splitext(asset_name)
+
+            # In case that multiple assets has the same file name.
+            if asset_name not in exist_asset_names:
+                exist_asset_names.append(asset_name)
+            else:
+                name = "%s_%s" % (name, asset['id'])
+                exist_asset_names.append(name + extension)
+
+            asset_tags_map[asset['id']] = {'name': name,
                                            'extension': asset['extension']}
+
+        images = [image for image in soup.find_all('img')
+                  if image.attrs.get('assetid') is not None]
+
+        exist_names = []
+        if images:
+            asset_ids = [image.attrs.get('assetid') for image in images]
+            self._asset_retriever(asset_ids)
+
+            for image in images:
+                asset = self._asset_retriever[image['assetid']]
+                name, extension = os.path.splitext(asset.name)
+
+                # In case that multiple assets has the same file name.
+                if asset.name not in exist_names:
+                    exist_names.append(asset.name)
+                else:
+                    name = "%s_%s" % (name, image['assetid'])
+                    exist_names.append(name + extension)
+
+                asset_tags_map[image['assetid']] = {"name": name,
+                                                    "extension": extension.lstrip(".")}
 
         return asset_tags_map
 
@@ -1479,7 +1511,7 @@ class CourseraOnDemand(object):
                 extend_supplement_links(
                     resource_content, self._extract_links_from_text(value))
 
-                instructions = (IN_MEMORY_MARKER + self._markup_to_html(value),
+                instructions = (IN_MEMORY_MARKER + self._markup_to_html(value, to_b64=False),
                                 'resources')
                 extend_supplement_links(
                     resource_content, {IN_MEMORY_EXTENSION: [instructions]})
