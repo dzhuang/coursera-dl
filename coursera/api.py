@@ -1417,7 +1417,7 @@ class CourseraOnDemand(object):
         exist_names = []
         if images:
             asset_ids = [image.attrs.get('assetid') for image in images]
-            self._asset_retriever(asset_ids)
+            self._asset_retriever(asset_ids, download=False)
 
             for image in images:
                 asset = self._asset_retriever[image['assetid']]
