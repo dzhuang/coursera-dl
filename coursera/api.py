@@ -1002,7 +1002,7 @@ class CourseraOnDemand(object):
                 self._unrestricted_filenames)
             basename = clean_filename(
                 os.path.basename(filename),
-                self._unrestricted_filenames)
+                self._unrestricted_filenames) + "_" + asset_id
             url = url.strip()
 
             if extension not in destination:
@@ -1430,8 +1430,9 @@ class CourseraOnDemand(object):
                     name = "%s_%s" % (name, image['assetid'])
                     exist_names.append(name + extension)
 
-                asset_tags_map[image['assetid']] = {"name": name,
-                                                    "extension": extension.lstrip(".")}
+                asset_tags_map[image['assetid']] = {
+                    "name": name,
+                    "extension": extension.lstrip(".").lower()}
 
         return asset_tags_map
 
@@ -1680,17 +1681,18 @@ class CourseraOnDemand(object):
         supplement_links = {}
 
         # Build supplement links, providing nice titles along the way
-        for i, asset in enumerate(asset_urls):
+        for asset in asset_urls:
             title = clean_filename(
                 asset_tags_map[asset['id']]['name'],
-                self._unrestricted_filenames)
+                self._unrestricted_filenames) + "_" + asset['id']
+
             extension = clean_filename(
                 asset_tags_map[asset['id']]['extension'].strip(),
                 self._unrestricted_filenames)
             url = asset['url'].strip()
             if extension not in supplement_links:
                 supplement_links[extension] = []
-            supplement_links[extension].append((url, title, ids[i]))
+            supplement_links[extension].append((url, title, asset['id']))
 
         return supplement_links
 
