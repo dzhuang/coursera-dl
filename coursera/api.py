@@ -12,6 +12,11 @@ import logging
 import time
 import requests
 import urllib
+try:
+    import html as HTMLParser
+except ImportError:
+    # Python 2
+    from HTMLParser import HTMLParser
 
 from collections import namedtuple, OrderedDict
 from six import iterkeys, iteritems
@@ -836,7 +841,7 @@ class CourseraOnDemand(object):
 
         with database:
             db_item, _ = Item.get_or_create(item_id=quiz_id)
-            db_item.content = self._markup_to_html(markup, add_css_js=False, to_b64=False)
+            db_item.content = HTMLParser.unescape(self._markup_to_html(markup, add_css_js=False, to_b64=False))
             db_item.save()
 
         html = self._markup_to_html(markup, to_b64=False)
@@ -1230,7 +1235,7 @@ class CourseraOnDemand(object):
 
             with database:
                 db_item, _ = Item.get_or_create(item_id=element_id)
-                db_item.content = self._markup_to_html(text, add_css_js=False, to_b64=False)
+                db_item.content = HTMLParser.unescape(self._markup_to_html(text, add_css_js=False, to_b64=False))
                 db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
@@ -1269,7 +1274,7 @@ class CourseraOnDemand(object):
 
             with database:
                 db_item, _ = Item.get_or_create(item_id=element_id)
-                db_item.content = self._markup_to_html(text, add_css_js=False, to_b64=False)
+                db_item.content = HTMLParser.unescape(self._markup_to_html(text, add_css_js=False, to_b64=False))
                 db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
@@ -1308,7 +1313,7 @@ class CourseraOnDemand(object):
 
             with database:
                 db_item, _ = Item.get_or_create(item_id=element_id)
-                db_item.content = self._markup_to_html(text, add_css_js=False, to_b64=False)
+                db_item.content = HTMLParser.unescape(self._markup_to_html(text, add_css_js=False, to_b64=False))
                 db_item.save()
 
             supplement_links = self._extract_links_from_text(text)
@@ -1359,7 +1364,7 @@ class CourseraOnDemand(object):
 
                 with database:
                     db_item, _ = Item.get_or_create(item_id=element_id)
-                    db_item.content = self._markup_to_html(value, add_css_js=False, to_b64=False)
+                    db_item.content = HTMLParser.unescape(self._markup_to_html(value, add_css_js=False, to_b64=False))
                     db_item.save()
 
                 instructions = (IN_MEMORY_MARKER + self._markup_to_html(value, to_b64=False),
@@ -1506,7 +1511,7 @@ class CourseraOnDemand(object):
 
                 with database:
                     db_ref, _ = Reference.get_or_create(short_id=short_id)
-                    db_ref.content = self._markup_to_html(value, add_css_js=False, to_b64=False)
+                    db_ref.content = HTMLParser.unescape(self._markup_to_html(value, add_css_js=False, to_b64=False))
                     db_ref.save()
 
                 extend_supplement_links(
