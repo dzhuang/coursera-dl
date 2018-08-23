@@ -1686,10 +1686,10 @@ class CourseraOnDemand(object):
         supplement_links = {}
 
         # Build supplement links, providing nice titles along the way
-        for i, asset in enumerate(asset_urls):
+        for asset in asset_urls:
             title = clean_filename(
                 asset_tags_map[asset['id']]['name'],
-                self._unrestricted_filenames) + str(ids[i])
+                self._unrestricted_filenames) + "_" + asset['id']
 
             extension = clean_filename(
                 asset_tags_map[asset['id']]['extension'].strip(),
@@ -1697,7 +1697,7 @@ class CourseraOnDemand(object):
             url = asset['url'].strip()
             if extension not in supplement_links:
                 supplement_links[extension] = []
-            supplement_links[extension].append((url, title, ids[i]))
+            supplement_links[extension].append((url, title, asset['id']))
 
         return supplement_links
 
