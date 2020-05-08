@@ -90,9 +90,14 @@ def get_session():
     """
     Create a session with TLS v1.2 certificate.
     """
+    from requests.packages.urllib3.util.retry import Retry
+
+    retries = Retry(
+        total=5, backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504])
 
     session = requests.Session()
-    session.mount('https://', TLSAdapter())
+    session.mount('https://', TLSAdapter(max_retries=retries))
 
     return session
 
